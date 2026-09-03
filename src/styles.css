@@ -90,6 +90,21 @@ body {
 }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 
+/* ---------- sample-data banner ---------- */
+.sample-banner {
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.84rem;
+}
+.sample-banner-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding-top: 7px; padding-bottom: 7px;
+}
+.sample-note { color: var(--muted); }
+@media (max-width: 560px) {
+  .sample-note { display: none; }
+}
+
 /* ---------- buttons / inputs ---------- */
 .btn {
   font: inherit; font-size: 0.9rem; font-weight: 700;

@@ -3,6 +3,16 @@ import { uid } from './utils.ts';
 
 export const STORAGE_KEY = 'hindsight.v1';
 
+/** Separate key tracking whether the user is currently viewing the built-in sample dataset. */
+export const SAMPLE_FLAG_KEY = 'hindsight.sample';
+
+/** Built-in sample predictions use ids with this prefix (see seed.ts). */
+export const SAMPLE_ID_PREFIX = 'seed-';
+
+export function isSamplePrediction(p: Prediction): boolean {
+  return p.id.startsWith(SAMPLE_ID_PREFIX);
+}
+
 export type Listener = (predictions: Prediction[]) => void;
 
 function isCategory(x: unknown): x is Category {
@@ -76,14 +86,31 @@ export class Store {
   private predictions: Prediction[] = [];
   private listeners = new Set<Listener>();
   private storage: Storage | null;
+  private sampleActive = false;
 
   constructor(storage: Storage | null = defaultStorage()) {
     this.storage = storage;
     this.predictions = this.load();
+    this.sampleActive = this.loadSampleFlag();
+    this.syncSampleFlag();
   }
 
   all(): Prediction[] {
     return [...this.predictions];
+  }
+
+  /**
+   * True while the loaded dataset IS the built-in sample dataset:
+   * sample mode was entered via load-seed/importSeed and every prediction
+   * is a sample one. As soon as the user adds their own prediction
+   * (or the sample is cleared), this flips to false.
+   */
+  isSampleDataset(): boolean {
+    return (
+      this.sampleActive &&
+      this.predictions.length > 0 &&
+      this.predictions.every(isSamplePrediction)
+    );
   }
 
   subscribe(fn: Listener): () => void {
@@ -105,6 +132,31 @@ export class Store {
       // storage full or unavailable — app keeps working in memory
     }
     this.emit();
+  }
+
+  private persistSampleFlag(): void {
+    try {
+      if (this.sampleActive) this.storage?.setItem(SAMPLE_FLAG_KEY, '1');
+      else this.storage?.removeItem(SAMPLE_FLAG_KEY);
+    } catch {
+      // storage unavailable — app keeps working in memory
+    }
+  }
+
+  private loadSampleFlag(): boolean {
+    try {
+      return this.storage?.getItem(SAMPLE_FLAG_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  /** Drop the sample flag when no sample predictions remain (e.g. deleted one by one). */
+  private syncSampleFlag(): void {
+    if (this.sampleActive && !this.predictions.some(isSamplePrediction)) {
+      this.sampleActive = false;
+      this.persistSampleFlag();
+    }
   }
 
   private load(): Prediction[] {
@@ -198,6 +250,7 @@ export class Store {
     const before = this.predictions.length;
     this.predictions = this.predictions.filter((p) => p.id !== id);
     if (this.predictions.length !== before) {
+      this.syncSampleFlag();
       this.persist();
       return true;
     }
@@ -208,6 +261,7 @@ export class Store {
   importMany(list: Prediction[], mode: 'merge' | 'replace'): number {
     if (mode === 'replace') {
       this.predictions = [...list];
+      this.syncSampleFlag();
       this.persist();
       return list.length;
     }
@@ -218,8 +272,35 @@ export class Store {
     return fresh.length;
   }
 
+  /**
+   * Load the built-in sample dataset (merge, deduped). Enters sample mode:
+   * the app shows a "Viewing sample data" banner until the user exits it.
+   * Returns count added.
+   */
+  importSeed(list: Prediction[]): number {
+    this.sampleActive = true;
+    this.persistSampleFlag();
+    return this.importMany(list, 'merge');
+  }
+
+  /**
+   * Exit sample mode: remove ONLY the built-in sample predictions,
+   * never user-created ones. Returns count removed.
+   */
+  removeSampleData(): number {
+    const before = this.predictions.length;
+    this.predictions = this.predictions.filter((p) => !isSamplePrediction(p));
+    this.sampleActive = false;
+    this.persistSampleFlag();
+    const removed = before - this.predictions.length;
+    this.persist();
+    return removed;
+  }
+
   clear(): void {
     this.predictions = [];
+    this.sampleActive = false;
+    this.persistSampleFlag();
     this.persist();
   }
 }

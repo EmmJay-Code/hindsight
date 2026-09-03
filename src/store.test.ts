@@ -132,7 +132,6 @@ describe('normalize + import validation', () => {
     expect(parseImport('{"predictions": []}').ok).toBe(false);
   });
 });
-
 describe('seed data', () => {
   it('builds a usable demo journal', () => {
     const seed = buildSeed();
@@ -141,5 +140,94 @@ describe('seed data', () => {
     expect(seed.some((s) => s.status === 'correct')).toBe(true);
     expect(seed.some((s) => s.status === 'incorrect')).toBe(true);
     expect(new Set(seed.map((s) => s.id)).size).toBe(seed.length);
+  });
+});
+
+describe('sample dataset tracking', () => {
+  let storage: Storage;
+  let store: Store;
+  beforeEach(() => {
+    storage = memStorage();
+    store = new Store(storage);
+  });
+
+  function mine(title = 'my own prediction') {
+    return store.create({
+      title,
+      details: '',
+      rationale: '',
+      disconfirm: '',
+      category: 'Work',
+      confidence: 60,
+      resolveBy: null,
+      tags: [],
+    });
+  }
+
+  it('is not a sample dataset when empty or user-only', () => {
+    expect(store.isSampleDataset()).toBe(false);
+    mine();
+    expect(store.isSampleDataset()).toBe(false);
+  });
+
+  it('importSeed enters sample mode and survives reload', () => {
+    const seed = buildSeed();
+    expect(store.importSeed(seed)).toBe(seed.length);
+    expect(store.isSampleDataset()).toBe(true);
+    // reload from same storage — banner should still show
+    expect(new Store(storage).isSampleDataset()).toBe(true);
+    // re-importing is a no-op but stays in sample mode
+    expect(store.importSeed(seed)).toBe(0);
+    expect(store.isSampleDataset()).toBe(true);
+  });
+
+  it('adding a user prediction exits sample mode but keeps all data', () => {
+    const seed = buildSeed();
+    store.importSeed(seed);
+    mine();
+    expect(store.isSampleDataset()).toBe(false);
+    expect(store.all()).toHaveLength(seed.length + 1);
+  });
+
+  it('removeSampleData clears only sample predictions, never user ones', () => {
+    const seed = buildSeed();
+    store.importSeed(seed);
+    const kept = mine();
+    const removed = store.removeSampleData();
+    expect(removed).toBe(seed.length);
+    expect(store.all()).toEqual([kept]);
+    expect(store.isSampleDataset()).toBe(false);
+    // persists: still the user's dataset after reload
+    const reloaded = new Store(storage);
+    expect(reloaded.all()).toEqual([kept]);
+    expect(reloaded.isSampleDataset()).toBe(false);
+  });
+
+  it('removeSampleData on a pure sample dataset returns the genuine empty state', () => {
+    const seed = buildSeed();
+    store.importSeed(seed);
+    expect(store.removeSampleData()).toBe(seed.length);
+    expect(store.all()).toHaveLength(0);
+    expect(store.isSampleDataset()).toBe(false);
+  });
+
+  it('deleting every sample prediction by hand exits sample mode', () => {
+    store.importSeed(buildSeed());
+    for (const p of store.all()) store.remove(p.id);
+    expect(store.all()).toHaveLength(0);
+    expect(store.isSampleDataset()).toBe(false);
+    expect(new Store(storage).isSampleDataset()).toBe(false);
+  });
+
+  it('clear() and replace-import exit sample mode', () => {
+    store.importSeed(buildSeed());
+    store.clear();
+    expect(new Store(storage).isSampleDataset()).toBe(false);
+
+    store.importSeed(buildSeed());
+    const kept = mine();
+    store.importMany([kept], 'replace');
+    expect(store.isSampleDataset()).toBe(false);
+    expect(store.all()).toEqual([kept]);
   });
 });

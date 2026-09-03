@@ -55,8 +55,13 @@ export function createApp(store: Store, root: HTMLElement): void {
         </div>
       </div>
     </header>
-    <main id="view" class="wrap" tabindex="-1"></main>
-    <footer class="wrap footer">
+    <div id="sample-banner" class="sample-banner" hidden>
+      <div class="wrap sample-banner-inner">
+        <span role="status"><strong>Viewing sample data</strong> <span class="sample-note">— these are example predictions so you can explore scoring.</span></span>
+        <button class="btn xs" data-action="start-fresh">Start with my own data</button>
+      </div>
+    </div>
+    <main id="view" class="wrap" tabindex="-1"></main>    <footer class="wrap footer">
       <span><strong>Hindsight</strong> · your predictions never leave this browser</span>
       <span class="footer-right"><button class="linklike" data-action="open-data">Export</button> · <button class="linklike" data-action="go" data-view="about">Methodology</button> · v1.0</span>
     </footer>
@@ -119,6 +124,8 @@ export function createApp(store: Store, root: HTMLElement): void {
     const badge = shell.querySelector('#pending-count') as HTMLElement;
     badge.hidden = pending === 0;
     badge.textContent = String(pending);
+    const banner = shell.querySelector('#sample-banner') as HTMLElement;
+    banner.hidden = !store.isSampleDataset();
     // mark active tab for icon-buttons that navigate (brand)
     if (view === 'dashboard') viewEl.innerHTML = dashboardHTML(all);
     else if (view === 'journal') viewEl.innerHTML = journalHTML(all, filters);
@@ -505,13 +512,23 @@ export function createApp(store: Store, root: HTMLElement): void {
         fileInput.click();
         break;
       case 'load-seed': {
-        const n = store.importMany(buildSeed(), 'merge');
+        const n = store.importSeed(buildSeed());
         closeModal();
         if (n === 0) toast('Sample data is already loaded.');
         else {
           toast(`Loaded ${n} sample predictions.`);
           setView('dashboard');
         }
+        break;
+      }
+      case 'start-fresh': {
+        const removed = store.removeSampleData();
+        if (store.all().length === 0) setView('dashboard');
+        toast(
+          removed > 0
+            ? 'Sample data cleared — a fresh journal, ready for your first prediction.'
+            : 'Already a fresh journal.',
+        );
         break;
       }
       case 'wipe':
