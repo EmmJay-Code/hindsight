@@ -692,8 +692,8 @@ function initTheme(shell: HTMLElement): void {
   try {
     saved = localStorage.getItem(THEME_KEY);
   } catch { /* ignore */ }
-  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-  document.documentElement.dataset['theme'] = saved ?? (prefersDark ? 'dark' : 'light');
+  // Default to light mode for new visitors; an explicit saved choice always wins.
+  document.documentElement.dataset['theme'] = saved ?? 'light';
   void shell;
 }
 
