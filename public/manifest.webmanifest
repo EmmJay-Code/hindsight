@@ -1,0 +1,17 @@
+{
+  "name": "Hindsight — a decision journal that keeps you honest",
+  "short_name": "Hindsight",
+  "description": "Log predictions, resolve them, and discover how calibrated your judgment really is. Local-first, private by design.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#faf7f1",
+  "theme_color": "#1a1611",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
